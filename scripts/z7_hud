@@ -1,0 +1,214 @@
+#!/usr/bin/env python3
+import subprocess
+import threading
+import re
+import sys
+
+from rich.console import Console
+from rich.table import Table
+from rich.text import Text
+from rich import box
+
+# --- CONFIGURATION ---
+# Sawayama Palette
+C_RED = "#ff0055"
+C_BLUE = "#00aaff"
+C_GREEN = "#00ff33"
+C_YELLOW = "#ffcc00"
+C_GREY = "#444444"
+C_WHITE = "#eeeeee"
+
+NODES = [{"name": "GERMANY (PROD)", "ip": "[ip]"}, {"name": "ITALY (C2)", "ip": "[ip]"}]
+
+# --- ARTWORK ---
+LOGO_LARGE = r"""
+  ________     __       __   __  ___       __       ___  ___  __       ___      ___       __           ________  _________
+ /"       )   /""\     |"  |/  \|  "|     /""\     |"  \/"  |/""\     |"  \    /"  |     /""\         ("      "\("       "\
+(:   \___/   /    \    |'  /    \:  |    /    \     \   \  //    \     \   \  //   |    /    \         \___/   :)\___/   :/
+ \___  \    /' /\  \   |: /'        |   /' /\  \     \\  \//' /\  \    /\\  \/.    |   /' /\  \          /  ___/    /   //
+  __/  \\  //  __'  \   \//  /\'    |  //  __'  \    /   ///  __'  \  |: \.        |  //  __'  \        //  \__   __\  ./
+ /" \   :)/   /  \\  \  /   /  \\   | /   /  \\  \  /   //   /  \\  \ |.  \    /:  | /   /  \\  \      (:   / "\ (:  \_/ \
+(_______/(___/    \___)|___/    \___|(___/    \___)|___/(___/    \___)|___|\__/|___|(___/    \___)      \_______) \_______)
+"""
+
+LOGO_SMALL = r"""
+  ________  _________
+("      "\("       "\
+ \___/   :)\___/   :/
+   /  ___/    /   //
+  //  \__   __\  ./
+ (:   / "\ (:  \_/ \
+  \_______) \_______)
+
+   TURBOLANCE
+"""
+
+# --- LOGIC ---
+
+
+def get_sys_info():
+    try:
+        # Standard Info
+        kernel = subprocess.check_output(["uname", "-r"]).decode().strip().split("-")[0]
+        mem = (
+            subprocess.check_output(
+                "free -h | awk '/^Mem:/ {print $3 \"/\" $2}'", shell=True
+            )
+            .decode()
+            .strip()
+        )
+        disk = (
+            subprocess.check_output("df -h / | awk 'NR==2 {print $5}'", shell=True)
+            .decode()
+            .strip()
+        )
+
+        # New Telemetry: Uptime, Load Average, and Local IP
+        uptime = (
+            subprocess.check_output("uptime -p", shell=True)
+            .decode()
+            .strip()
+            .replace("up ", "")
+        )
+        load = (
+            subprocess.check_output(
+                'cat /proc/loadavg | awk \'{print $1 ", " $2 ", " $3}\'', shell=True
+            )
+            .decode()
+            .strip()
+        )
+
+        local_ip = (
+            subprocess.check_output(
+                "ip -4 addr show scope global | grep inet | awk '{print $2}' | cut -d / -f 1 | head -n 1",
+                shell=True,
+            )
+            .decode()
+            .strip()
+        )
+
+        if not local_ip:
+            local_ip = "OFFLINE"
+
+    except Exception:
+        return "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"
+
+    return kernel, mem, disk, uptime, load, local_ip
+
+
+def ping_node(node):
+    # Failsafe if IP is a placeholder
+    if node["ip"] == "[ip]":
+        node["color"] = C_GREY
+        node["stat_text"] = "NO TARGET"
+        return
+
+    try:
+        # Ping with 0.6s timeout, count 1
+        output = subprocess.check_output(
+            ["ping", "-c", "1", "-W", "1", node["ip"]], stderr=subprocess.STDOUT
+        ).decode()
+
+        match = re.search(r"time=([\d\.]+)", output)
+        if match:
+            ms = float(match.group(1))
+            node["raw_ms"] = ms
+            if ms < 60:
+                node["color"] = C_GREEN
+            elif ms < 150:
+                node["color"] = C_YELLOW
+            else:
+                node["color"] = C_RED
+            node["stat_text"] = f"{ms:.2f} ms"
+        else:
+            node["color"] = C_GREEN
+            node["stat_text"] = "ONLINE"
+    except:
+        node["color"] = C_RED
+        node["stat_text"] = "DOWN"
+
+
+def main():
+    console = Console()
+    width = console.size.width
+
+    # 1. Start Async Work
+    threads = []
+    for node in NODES:
+        t = threading.Thread(target=ping_node, args=(node,))
+        threads.append(t)
+        t.start()
+
+    # 2. Print Logo
+    logo = LOGO_LARGE if width >= 100 else LOGO_SMALL
+    console.print(logo, style=C_RED, highlight=False)
+
+    # 3. Get Sys Info
+    kernel, mem, disk, uptime, load, local_ip = get_sys_info()
+
+    # 4. Wait for threads
+    for t in threads:
+        t.join()
+
+    # --- TABLE CONSTRUCTION ---
+
+    # Grid Table
+    grid = Table.grid(expand=True)
+    grid.add_column()
+
+    # A. SYSTEM DIAGNOSTICS TABLE
+    sys_table = Table(
+        box=box.DOUBLE_EDGE,
+        border_style=C_RED,
+        header_style=f"bold {C_RED}",
+        expand=True,
+        show_header=True,
+    )
+    sys_table.add_column("SYSTEM DIAGNOSTICS", style=C_RED, justify="left")
+
+    # Expanded grid to hold the new telemetry cleanly
+    sys_content = Table.grid(padding=(0, 2))
+    sys_content.add_column(style=f"bold {C_WHITE}", justify="right")
+    sys_content.add_column(style=C_BLUE)
+    sys_content.add_column(style=f"bold {C_WHITE}", justify="right")
+    sys_content.add_column(style=C_GREEN)
+
+    sys_content.add_row("KERNEL :", kernel, "UPTIME :", uptime)
+    sys_content.add_row("MEMORY :", mem, "LOAD AVG :", Text(load, style=C_YELLOW))
+    sys_content.add_row(
+        "STORAGE :",
+        Text(disk, style=C_YELLOW),
+        "LOCAL IP :",
+        Text(local_ip, style=C_BLUE),
+    )
+
+    sys_table.add_row(sys_content)
+    grid.add_row(sys_table)
+
+    # B. NETWORK UPLINK TABLE
+    net_table = Table(
+        box=box.DOUBLE_EDGE,
+        border_style=C_RED,
+        header_style=f"bold {C_RED}",
+        expand=True,
+        show_header=True,
+    )
+
+    net_table.add_column("NODE", style=f"bold {C_WHITE}")
+    net_table.add_column("LATENCY", justify="right")
+
+    for node in NODES:
+        status_text = node.get("stat_text", "WAIT")
+        status_color = node.get("color", C_RED)
+
+        net_table.add_row(node["name"], Text(status_text, style=status_color))
+
+    grid.add_row(net_table)
+
+    # Print the master grid
+    console.print(grid)
+    print("")
+
+
+if __name__ == "__main__":
+    main()
