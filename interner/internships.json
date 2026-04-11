@@ -1,27 +1,37 @@
 [
-    {
-        "company": "Yandex",
-        "position": "Infosec",
-        "status": "DENIED 󰯆"
-    },
-    {
-        "company": "Innostage",
-        "position": "Infosec",
-        "status": "SENT "
-    },
-    {
-        "company": "Tinkoff",
-        "position": "Backend Python",
-        "status": "SENT "
-    },
-    {
-        "company": "Tinkoff",
-        "position": "Backend GoLang",
-        "status": "SENT "
-    },
-    {
-        "company": "Positive Technologies",
-        "position": "AppSec",
-        "status": "SENT "
-    }
+  {
+    "company": "Yandex",
+    "position": "Infosec",
+    "status": "DENIED 󰯆"
+  },
+  {
+    "company": "Innostage",
+    "position": "Infosec",
+    "status": "SENT "
+  },
+  {
+    "company": "Tinkoff",
+    "position": "Backend Python",
+    "status": "SENT "
+  },
+  {
+    "company": "Tinkoff",
+    "position": "Backend GoLang",
+    "status": "SENT "
+  },
+  {
+    "company": "Positive Technologies",
+    "position": "AppSec",
+    "status": "SENT "
+  },
+  {
+    "company": "Kaspersky",
+    "position": "Any",
+    "status": "NOT OPENED "
+  },
+  {
+    "company": "ФосАгро",
+    "position": "SOC L1",
+    "status": "SENT "
+  }
 ]
